@@ -1,0 +1,131 @@
+version: '3.8'
+
+services:
+  # MySQL数据库
+  mysql:
+    image: mysql:8.0
+    container_name: petverse-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: petverse_db
+      MYSQL_USER: petverse
+      MYSQL_PASSWORD: petverse123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+    networks:
+      - petverse-network
+
+  # Redis缓存
+  redis:
+    image: redis:7-alpine
+    container_name: petverse-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - petverse-network
+
+  # RabbitMQ消息队列
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: petverse-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: petverse
+      RABBITMQ_DEFAULT_PASS: petverse123
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    restart: unless-stopped
+    networks:
+      - petverse-network
+
+  # MinIO对象存储
+  minio:
+    image: minio/minio:latest
+    container_name: petverse-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+    networks:
+      - petverse-network
+
+  # TimescaleDB (PostgreSQL扩展)
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: petverse-timescaledb
+    environment:
+      POSTGRES_DB: pettag_db
+      POSTGRES_USER: petverse
+      POSTGRES_PASSWORD: petverse123
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - petverse-network
+
+  # EMQX MQTT Broker
+  emqx:
+    image: emqx/emqx:5.0
+    container_name: petverse-emqx
+    environment:
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: public
+    ports:
+      - "1883:1883"
+      - "8083:8083"
+      - "8084:8084"
+      - "8883:8883"
+      - "18083:18083"
+    restart: unless-stopped
+    networks:
+      - petverse-network
+
+  # API应用
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: petverse-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Server=mysql;Database=petverse_db;Uid=petverse;Pwd=petverse123;
+      - ConnectionStrings__Redis=redis:6379
+    ports:
+      - "8080:80"
+    depends_on:
+      - mysql
+      - redis
+      - rabbitmq
+      - minio
+      - timescaledb
+      - emqx
+    restart: unless-stopped
+    networks:
+      - petverse-network
+
+volumes:
+  mysql_data:
+  redis_data:
+  rabbitmq_data:
+  minio_data:
+  timescaledb_data:
+
+networks:
+  petverse-network:
+    driver: bridge
