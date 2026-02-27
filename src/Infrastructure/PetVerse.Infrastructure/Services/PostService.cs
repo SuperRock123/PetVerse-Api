@@ -191,10 +191,10 @@ public class PostService : IPostService
                 UserId = request.UserId,
                 PetId = request.PetId,
                 Content = request.Content,
-                MediaUrls = request.MediaUrls != null ? JsonConvert.SerializeObject(request.MediaUrls) : null,
                 Location = request.Location,
                 Visibility = request.Visibility,
-                Status = 1
+                Status = 1,
+                MediaCount = (byte)(request.MediaItems?.Count ?? 0)
             };
 
             _context.Posts.Add(post);
@@ -237,9 +237,14 @@ public class PostService : IPostService
 
             // 更新帖子信息
             if (request.Content != null) post.Content = request.Content;
-            if (request.MediaUrls != null) post.MediaUrls = JsonConvert.SerializeObject(request.MediaUrls);
             if (request.Location != null) post.Location = request.Location;
             if (request.Visibility.HasValue) post.Visibility = request.Visibility.Value;
+            
+            // 更新媒体数量
+            if (request.MediaItems != null)
+            {
+                post.MediaCount = (byte)request.MediaItems.Count;
+            }
 
             post.UpdatedAt = DateTime.UtcNow;
 
@@ -478,18 +483,9 @@ public class PostService : IPostService
 
     private PostResponse MapToPostResponse(Post post)
     {
+        // 新的媒体结构使用PostMedia实体，这里返回空列表
+        // 实际的媒体URL应该通过关联的PostMedia实体获取
         var mediaUrls = new List<string>();
-        if (!string.IsNullOrEmpty(post.MediaUrls))
-        {
-            try
-            {
-                mediaUrls = JsonConvert.DeserializeObject<List<string>>(post.MediaUrls) ?? new List<string>();
-            }
-            catch
-            {
-                // 解析失败时保持空列表
-            }
-        }
 
         return new PostResponse
         {
@@ -501,10 +497,13 @@ public class PostService : IPostService
             Location = post.Location,
             LikesCount = post.LikesCount,
             CommentsCount = post.CommentsCount,
+            ViewCount = post.ViewCount,
+            MediaCount = post.MediaCount,
             Visibility = post.Visibility,
             Status = post.Status,
             CreatedAt = post.CreatedAt,
             UpdatedAt = post.UpdatedAt,
+            PublishedAt = post.PublishedAt,
             UserName = post.User?.Username ?? "",
             UserAvatar = post.User?.AvatarUrl,
             Nickname = post.User?.Nickname,

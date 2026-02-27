@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using PetVerse.Core.Entities;
 
 namespace PetVerse.Core.DTOs.Post;
 
@@ -16,13 +17,40 @@ public class CreatePostRequest
     [StringLength(2000, ErrorMessage = "内容长度不能超过2000个字符")]
     public string Content { get; set; } = string.Empty;
 
-    public List<string>? MediaUrls { get; set; }
+    public List<CreatePostMediaRequest>? MediaItems { get; set; }
 
     [StringLength(128, ErrorMessage = "位置信息长度不能超过128个字符")]
     public string? Location { get; set; }
 
     [Range(1, 3, ErrorMessage = "可见性必须在1-3之间")]
     public sbyte Visibility { get; set; } = 1; // 1=公开 2=仅好友 3=私密
+}
+
+/// <summary>
+/// 帖子媒体创建请求DTO
+/// </summary>
+public class CreatePostMediaRequest
+{
+    [Required(ErrorMessage = "媒体类型不能为空")]
+    public MediaType MediaType { get; set; }
+    
+    [Required(ErrorMessage = "MIME类型不能为空")]
+    [StringLength(100, ErrorMessage = "MIME类型长度不能超过100个字符")]
+    public string MimeType { get; set; } = string.Empty;
+    
+    [StringLength(255, ErrorMessage = "原始文件名长度不能超过255个字符")]
+    public string? OriginalName { get; set; }
+    
+    [Required(ErrorMessage = "存储Key不能为空")]
+    [StringLength(512, ErrorMessage = "存储Key长度不能超过512个字符")]
+    public string StorageKey { get; set; } = string.Empty;
+    
+    [StringLength(512, ErrorMessage = "URL路径长度不能超过512个字符")]
+    public string? UrlPath { get; set; }
+    
+    public string? Meta { get; set; } // JSON字符串
+    
+    public ushort DisplayOrder { get; set; } = 0;
 }
 
 /// <summary>
@@ -33,13 +61,42 @@ public class UpdatePostRequest
     [StringLength(2000, ErrorMessage = "内容长度不能超过2000个字符")]
     public string? Content { get; set; }
 
-    public List<string>? MediaUrls { get; set; }
+    public List<UpdatePostMediaRequest>? MediaItems { get; set; }
 
     [StringLength(128, ErrorMessage = "位置信息长度不能超过128个字符")]
     public string? Location { get; set; }
 
     [Range(1, 3, ErrorMessage = "可见性必须在1-3之间")]
     public sbyte? Visibility { get; set; }
+}
+
+/// <summary>
+/// 帖子媒体更新请求DTO
+/// </summary>
+public class UpdatePostMediaRequest
+{
+    public ulong? Id { get; set; } // 如果为空则为新增
+    
+    [Required(ErrorMessage = "媒体类型不能为空")]
+    public MediaType MediaType { get; set; }
+    
+    [Required(ErrorMessage = "MIME类型不能为空")]
+    [StringLength(100, ErrorMessage = "MIME类型长度不能超过100个字符")]
+    public string MimeType { get; set; } = string.Empty;
+    
+    [StringLength(255, ErrorMessage = "原始文件名长度不能超过255个字符")]
+    public string? OriginalName { get; set; }
+    
+    [Required(ErrorMessage = "存储Key不能为空")]
+    [StringLength(512, ErrorMessage = "存储Key长度不能超过512个字符")]
+    public string StorageKey { get; set; } = string.Empty;
+    
+    [StringLength(512, ErrorMessage = "URL路径长度不能超过512个字符")]
+    public string? UrlPath { get; set; }
+    
+    public string? Meta { get; set; } // JSON字符串
+    
+    public ushort DisplayOrder { get; set; } = 0;
 }
 
 /// <summary>
@@ -55,10 +112,13 @@ public class PostResponse
     public string? Location { get; set; }
     public uint LikesCount { get; set; }
     public uint CommentsCount { get; set; }
+    public uint ViewCount { get; set; }
+    public byte MediaCount { get; set; }
     public sbyte Visibility { get; set; }
     public sbyte Status { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    public DateTime? PublishedAt { get; set; }
     
     // 关联用户信息
     public string UserName { get; set; } = string.Empty;

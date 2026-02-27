@@ -49,4 +49,13 @@ public class BaseController : ControllerBase
     {
         return StatusCode(500, ApiResponse<object>.CreateError(message, null, 500));
     }
+
+    /// <summary>
+    /// 获取当前用户ID
+    /// </summary>
+    protected ulong GetCurrentUserId()
+    {
+        var userIdClaim = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        return ulong.TryParse(userIdClaim, out var userId) ? userId : 0;
+    }
 }

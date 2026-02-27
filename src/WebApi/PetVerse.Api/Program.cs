@@ -56,11 +56,15 @@ builder.Services.AddApplicationServices();
 builder.Services.AddScoped<PetVerse.Core.Interfaces.IUserService, PetVerse.Infrastructure.Services.UserService>();
 builder.Services.AddScoped<PetVerse.Core.Interfaces.IPetService, PetVerse.Infrastructure.Services.PetService>();
 builder.Services.AddScoped<PetVerse.Core.Interfaces.IPostService, PetVerse.Infrastructure.Services.PostService>();
+builder.Services.AddScoped<PetVerse.Core.Interfaces.IMediaService, PetVerse.Infrastructure.Services.MediaService>();
 builder.Services.AddScoped<PetVerse.Core.Interfaces.IJwtAuthService, PetVerse.Infrastructure.Services.JwtAuthService>();
 builder.Services.AddScoped<PetVerse.Core.Interfaces.IPermissionService, PetVerse.Infrastructure.Services.PermissionService>();
 
 // Add Infrastructure Services
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// 注册存储服务（使用内存存储进行开发测试）
+builder.Services.AddScoped<PetVerse.Core.Interfaces.IStorageService, PetVerse.Infrastructure.Services.InMemoryStorageService>();
 
 // Add Health Checks
 builder.Services.AddHealthChecks();
