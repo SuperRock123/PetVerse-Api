@@ -1,0 +1,2 @@
+cd "d:\文件D\学校考试\大四下exams\毕业设计选题\PetVerse-Api" ; 
+dotnet run --project src/WebApi/PetVerse.Api/PetVerse.Api.csproj
