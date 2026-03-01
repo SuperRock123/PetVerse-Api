@@ -30,6 +30,7 @@ public class PostService : IPostService
             var query = _context.Posts
                 .Include(p => p.User)
                 .Include(p => p.Pet)
+                .Include(p => p.MediaItems)
                 .AsQueryable();
 
             // 应用查询条件
@@ -99,6 +100,7 @@ public class PostService : IPostService
             var post = await _context.Posts
                 .Include(p => p.User)
                 .Include(p => p.Pet)
+                .Include(p => p.MediaItems)
                 .Include(p => p.Comments)
                     .ThenInclude(c => c.User)
                 .FirstOrDefaultAsync(p => p.Id == id && p.Status == 1);
@@ -133,6 +135,7 @@ public class PostService : IPostService
             var posts = await _context.Posts
                 .Include(p => p.User)
                 .Include(p => p.Pet)
+                .Include(p => p.MediaItems)
                 .Where(p => p.UserId == userId && p.Status == 1)
                 .OrderByDescending(p => p.CreatedAt)
                 .Take(limit)
@@ -154,6 +157,7 @@ public class PostService : IPostService
             var posts = await _context.Posts
                 .Include(p => p.User)
                 .Include(p => p.Pet)
+                .Include(p => p.MediaItems)
                 .Where(p => p.PetId == petId && p.Status == 1)
                 .OrderByDescending(p => p.CreatedAt)
                 .Take(limit)
@@ -194,16 +198,43 @@ public class PostService : IPostService
                 Location = request.Location,
                 Visibility = request.Visibility,
                 Status = 1,
-                MediaCount = (byte)(request.MediaItems?.Count ?? 0)
+                // MediaCount 是生成列，不需要手动设置
             };
 
             _context.Posts.Add(post);
             await _context.SaveChangesAsync();
 
+            // 处理媒体资源
+            if (request.MediaItems != null && request.MediaItems.Any())
+            {
+                var mediaEntities = request.MediaItems.Select((item, index) => new PostMedia
+                {
+                    PostId = post.Id,
+                    MediaType = item.MediaType,
+                    MimeType = item.MimeType,
+                    OriginalName = item.OriginalName,
+                    StorageKey = item.StorageKey,
+                    UrlPath = item.UrlPath,
+                    Meta = item.Meta,
+                    DisplayOrder = item.DisplayOrder,
+                    Status = 1,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                }).ToList();
+
+                _context.PostMedias.AddRange(mediaEntities);
+                await _context.SaveChangesAsync();
+
+                // 更新帖子的媒体数量
+                post.MediaCount = (byte)mediaEntities.Count;
+                await _context.SaveChangesAsync();
+            }
+
             // 重新加载包含关联信息的数据
             var createdPost = await _context.Posts
                 .Include(p => p.User)
                 .Include(p => p.Pet)
+                .Include(p => p.MediaItems)
                 .FirstAsync(p => p.Id == post.Id);
 
             return MapToPostResponse(createdPost);
@@ -230,6 +261,7 @@ public class PostService : IPostService
             var post = await _context.Posts
                 .Include(p => p.User)
                 .Include(p => p.Pet)
+                .Include(p => p.MediaItems)
                 .FirstOrDefaultAsync(p => p.Id == id && p.Status == 1);
 
             if (post == null)
@@ -243,7 +275,7 @@ public class PostService : IPostService
             // 更新媒体数量
             if (request.MediaItems != null)
             {
-                post.MediaCount = (byte)request.MediaItems.Count;
+                post.MediaCount = (byte?)request.MediaItems.Count;
             }
 
             post.UpdatedAt = DateTime.UtcNow;
@@ -483,9 +515,13 @@ public class PostService : IPostService
 
     private PostResponse MapToPostResponse(Post post)
     {
-        // 新的媒体结构使用PostMedia实体，这里返回空列表
-        // 实际的媒体URL应该通过关联的PostMedia实体获取
-        var mediaUrls = new List<string>();
+        // 从PostMedia实体提取媒体URL列表
+        var mediaUrls = post.MediaItems?
+            .Where(m => m.Status == 1)
+            .OrderBy(m => m.DisplayOrder)
+            .Select(m => m.UrlPath ?? string.Empty)
+            .Where(url => !string.IsNullOrEmpty(url))
+            .ToList() ?? new List<string>();
 
         return new PostResponse
         {

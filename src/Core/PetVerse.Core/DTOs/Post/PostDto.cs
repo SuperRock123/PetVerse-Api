@@ -113,7 +113,7 @@ public class PostResponse
     public uint LikesCount { get; set; }
     public uint CommentsCount { get; set; }
     public uint ViewCount { get; set; }
-    public byte MediaCount { get; set; }
+    public byte? MediaCount { get; set; }
     public sbyte Visibility { get; set; }
     public sbyte Status { get; set; }
     public DateTime CreatedAt { get; set; }

@@ -3,6 +3,7 @@ using PetVerse.Infrastructure.Extensions;
 using PetVerse.Api.Extensions;
 using PetVerse.Api.Middleware;
 using Microsoft.OpenApi.Models;
+using Minio;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -63,8 +64,26 @@ builder.Services.AddScoped<PetVerse.Core.Interfaces.IPermissionService, PetVerse
 // Add Infrastructure Services
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// 注册存储服务（使用内存存储进行开发测试）
-builder.Services.AddScoped<PetVerse.Core.Interfaces.IStorageService, PetVerse.Infrastructure.Services.InMemoryStorageService>();
+// 注册MinIO客户端
+builder.Services.AddSingleton<Minio.IMinioClient>(provider =>
+{
+    var configuration = provider.GetRequiredService<IConfiguration>();
+    var endpoint = configuration["Storage:MinIO:Endpoint"] ?? configuration["MinIO:Endpoint"];
+    var accessKey = configuration["Storage:MinIO:AccessKey"] ?? configuration["MinIO:AccessKey"];
+    var secretKey = configuration["Storage:MinIO:SecretKey"] ?? configuration["MinIO:SecretKey"];
+    var useSsl = bool.TryParse(configuration["Storage:MinIO:UseSSL"], out var ssl) && ssl;
+
+    var minioClient = new Minio.MinioClient()
+        .WithEndpoint(endpoint)
+        .WithCredentials(accessKey, secretKey)
+        .WithSSL(useSsl)
+        .Build();
+
+    return minioClient;
+});
+
+// 注册存储服务（使用MinIO存储）
+builder.Services.AddScoped<PetVerse.Core.Interfaces.IStorageService, PetVerse.Infrastructure.Services.MinioStorageService>();
 
 // Add Health Checks
 builder.Services.AddHealthChecks();

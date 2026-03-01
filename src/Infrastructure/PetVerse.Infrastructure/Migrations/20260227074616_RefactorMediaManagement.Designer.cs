@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PetVerse.Infrastructure.Data;
 
@@ -10,9 +11,11 @@ using PetVerse.Infrastructure.Data;
 namespace PetVerse.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260227074616_RefactorMediaManagement")]
+    partial class RefactorMediaManagement
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -130,7 +133,7 @@ namespace PetVerse.Infrastructure.Migrations
                         .HasColumnType("datetime(6)")
                         .HasColumnName("created_at");
 
-                    b.Property<int>("MediaTypeInt")
+                    b.Property<int>("MediaType")
                         .HasColumnType("int")
                         .HasColumnName("media_type");
 
@@ -176,12 +179,9 @@ namespace PetVerse.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("MediaTypeInt");
+                    b.HasIndex("MediaType");
 
                     b.HasIndex("Status");
-
-                    b.HasIndex("StorageKey")
-                        .IsUnique();
 
                     b.HasIndex("UserId");
 
@@ -386,11 +386,15 @@ namespace PetVerse.Infrastructure.Migrations
                         .HasColumnType("varchar(128)")
                         .HasColumnName("location");
 
-                    b.Property<byte?>("MediaCount")
+                    b.Property<byte>("MediaCount")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("tinyint unsigned")
                         .HasDefaultValue((byte)0)
                         .HasColumnName("media_count");
+
+                    b.Property<string>("MediaIds")
+                        .HasColumnType("longtext")
+                        .HasColumnName("media_ids");
 
                     b.Property<ulong?>("PetId")
                         .HasColumnType("bigint unsigned")
@@ -437,79 +441,6 @@ namespace PetVerse.Infrastructure.Migrations
                     b.HasIndex("Status", "Visibility");
 
                     b.ToTable("posts", (string)null);
-                });
-
-            modelBuilder.Entity("PetVerse.Core.Entities.PostMedia", b =>
-                {
-                    b.Property<ulong>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint unsigned")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("created_at");
-
-                    b.Property<ushort>("DisplayOrder")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("smallint unsigned")
-                        .HasDefaultValue((ushort)0)
-                        .HasColumnName("display_order");
-
-                    b.Property<int>("MediaType")
-                        .HasColumnType("int")
-                        .HasColumnName("media_type");
-
-                    b.Property<string>("Meta")
-                        .HasColumnType("longtext")
-                        .HasColumnName("meta");
-
-                    b.Property<string>("MimeType")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("varchar(100)")
-                        .HasColumnName("mime_type");
-
-                    b.Property<string>("OriginalName")
-                        .HasMaxLength(255)
-                        .HasColumnType("varchar(255)")
-                        .HasColumnName("original_name");
-
-                    b.Property<ulong>("PostId")
-                        .HasColumnType("bigint unsigned")
-                        .HasColumnName("post_id");
-
-                    b.Property<sbyte>("Status")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("tinyint")
-                        .HasDefaultValue((sbyte)1)
-                        .HasColumnName("status");
-
-                    b.Property<string>("StorageKey")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("varchar(512)")
-                        .HasColumnName("storage_key");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("updated_at");
-
-                    b.Property<string>("UrlPath")
-                        .HasMaxLength(512)
-                        .HasColumnType("varchar(512)")
-                        .HasColumnName("url_path");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MediaType");
-
-                    b.HasIndex("PostId");
-
-                    b.HasIndex("PostId", "StorageKey")
-                        .IsUnique();
-
-                    b.ToTable("post_media", (string)null);
                 });
 
             modelBuilder.Entity("PetVerse.Core.Entities.Report", b =>
@@ -853,17 +784,6 @@ namespace PetVerse.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("PetVerse.Core.Entities.PostMedia", b =>
-                {
-                    b.HasOne("PetVerse.Core.Entities.Post", "Post")
-                        .WithMany("MediaItems")
-                        .HasForeignKey("PostId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Post");
-                });
-
             modelBuilder.Entity("PetVerse.Core.Entities.Report", b =>
                 {
                     b.HasOne("PetVerse.Core.Entities.User", "Handler")
@@ -920,8 +840,6 @@ namespace PetVerse.Infrastructure.Migrations
                     b.Navigation("Comments");
 
                     b.Navigation("Likes");
-
-                    b.Navigation("MediaItems");
                 });
 
             modelBuilder.Entity("PetVerse.Core.Entities.User", b =>

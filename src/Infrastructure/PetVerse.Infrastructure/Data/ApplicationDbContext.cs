@@ -17,6 +17,7 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public DbSet<PetVaccine> PetVaccines { get; set; } = null!;
     public DbSet<Post> Posts { get; set; } = null!;
     public DbSet<PostMedia> PostMedias { get; set; } = null!;
+    public DbSet<MediaResource> MediaResources { get; set; } = null!;
     public DbSet<Comment> Comments { get; set; } = null!;
     public DbSet<Like> Likes { get; set; } = null!;
     public DbSet<Report> Reports { get; set; } = null!;
@@ -241,6 +242,25 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
         {
             entity.ToTable("system_configs");
             entity.HasKey(e => e.Key);
+        });
+
+        // 配置MediaResource实体
+        modelBuilder.Entity<MediaResource>(entity =>
+        {
+            entity.ToTable("media_resources");
+            entity.HasKey(e => e.Id);
+            
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.MediaTypeInt);
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.StorageKey).IsUnique();
+            
+            entity.Property(e => e.Status).HasDefaultValue(1);
+            
+            entity.HasOne(mr => mr.User)
+                .WithMany()
+                .HasForeignKey(mr => mr.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 

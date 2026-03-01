@@ -39,7 +39,7 @@ public class MediaService : IMediaService
         _maxFileSize = long.Parse(maxSizeStr);
     }
 
-    public async Task<MediaResponse> UploadMediaAsync(string fileName, string contentType, Stream stream, ulong postId, ulong userId, ushort displayOrder = 0)
+    public async Task<MediaResponse> UploadMediaAsync(string fileName, string contentType, Stream stream, string? urlPath, ulong userId)
     {
         // 验证文件
         if (!ValidateFileType(fileName))
@@ -47,75 +47,41 @@ public class MediaService : IMediaService
             throw new DomainException($"不支持的文件类型: {Path.GetExtension(fileName)}");
         }
 
-        // 验证帖子存在性和权限
-        var post = await _context.Posts.FindAsync(postId);
-        if (post == null)
-        {
-            throw new NotFoundException($"帖子ID {postId} 不存在");
-        }
-
-        if (post.UserId != userId)
-        {
-            throw new UnauthorizedAccessException("无权限操作此帖子的媒体文件");
-        }
-
         try
         {
             // 上传到存储服务
-            var folder = $"posts/{postId:D}/media";
+            var folder = $"media/{userId:D}";
             var (url, key) = await _storageService.UploadFileAsync(fileName, contentType, stream, folder);
 
             // 创建媒体记录
-            var media = new PostMedia
+            var media = new MediaResource
             {
-                PostId = postId,
+                UserId = userId,
                 MediaType = DetermineMediaType(contentType),
                 MimeType = contentType,
                 OriginalName = fileName,
                 StorageKey = key,
-                UrlPath = url,
-                DisplayOrder = displayOrder,
+                UrlPath = urlPath, // 传入的urlPath，可能为null
                 Status = 1
             };
 
-            _context.PostMedias.Add(media);
+            _context.MediaResources.Add(media);
             await _context.SaveChangesAsync();
 
-            // 更新帖子的媒体数量
-            post.MediaCount = (byte)(await _context.PostMedias.CountAsync(m => m.PostId == postId && m.Status == 1));
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("媒体文件上传成功: ID={MediaId}, PostId={PostId}, Key={Key}", media.Id, postId, key);
+            _logger.LogInformation("媒体文件上传成功: ID={MediaId}, UserId={UserId}, Key={Key}", media.Id, userId, key);
 
             return MapToMediaResponse(media);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "媒体文件上传失败: PostId={PostId}, FileName={FileName}", postId, fileName);
+            _logger.LogError(ex, "媒体文件上传失败: UserId={UserId}, FileName={FileName}", userId, fileName);
             throw new InvalidOperationException($"媒体文件上传失败: {ex.Message}");
         }
     }
 
-    // 批量上传功能可以通过控制器层面实现，此处暂不实现
-    // public async Task<List<MediaResponse>> UploadMediasAsync(IEnumerable<IFormFile> files, ulong postId, ulong userId)
-    // {
-    //     var results = new List<MediaResponse>();
-    //     var displayOrder = 0;
-    //
-    //     foreach (var file in files)
-    //     {
-    //         var result = await UploadMediaAsync(file, postId, userId, (ushort)displayOrder);
-    //         results.Add(result);
-    //         displayOrder++;
-    //     }
-    //
-    //     return results;
-    // }
-
     public async Task<bool> DeleteMediaAsync(ulong mediaId, ulong userId)
     {
-        var media = await _context.PostMedias
-            .Include(m => m.Post)
+        var media = await _context.MediaResources
             .FirstOrDefaultAsync(m => m.Id == mediaId);
 
         if (media == null)
@@ -123,7 +89,8 @@ public class MediaService : IMediaService
             throw new NotFoundException($"媒体ID {mediaId} 不存在");
         }
 
-        if (media.Post?.UserId != userId)
+        // 验证权限：确保媒体资源属于当前用户
+        if (media.UserId != userId)
         {
             throw new UnauthorizedAccessException("无权限删除此媒体文件");
         }
@@ -137,13 +104,6 @@ public class MediaService : IMediaService
             media.Status = 0; // 0表示已删除
             await _context.SaveChangesAsync();
 
-            // 更新帖子的媒体数量
-            if (media.Post != null)
-            {
-                media.Post.MediaCount = (byte)(await _context.PostMedias.CountAsync(m => m.PostId == media.Post.Id && m.Status == 1));
-                await _context.SaveChangesAsync();
-            }
-
             _logger.LogInformation("媒体文件删除成功: ID={MediaId}, Key={Key}", mediaId, media.StorageKey);
             return true;
         }
@@ -154,34 +114,9 @@ public class MediaService : IMediaService
         }
     }
 
-    public async Task<int> DeleteMediasAsync(IEnumerable<ulong> mediaIds, ulong userId)
-    {
-        var successCount = 0;
-        
-        foreach (var mediaId in mediaIds)
-        {
-            if (await DeleteMediaAsync(mediaId, userId))
-            {
-                successCount++;
-            }
-        }
-        
-        return successCount;
-    }
-
-    public async Task<List<MediaResponse>> GetPostMediasAsync(ulong postId)
-    {
-        var medias = await _context.PostMedias
-            .Where(m => m.PostId == postId && m.Status == 1)
-            .OrderBy(m => m.DisplayOrder)
-            .ToListAsync();
-
-        return medias.Select(MapToMediaResponse).ToList();
-    }
-
     public async Task<MediaResponse> GetMediaAsync(ulong mediaId)
     {
-        var media = await _context.PostMedias.FindAsync(mediaId);
+        var media = await _context.MediaResources.FindAsync(mediaId);
         
         if (media == null || media.Status != 1)
         {
@@ -193,8 +128,7 @@ public class MediaService : IMediaService
 
     public async Task<MediaResponse> UpdateMediaAsync(ulong mediaId, UpdateMediaRequest request, ulong userId)
     {
-        var media = await _context.PostMedias
-            .Include(m => m.Post)
+        var media = await _context.MediaResources
             .FirstOrDefaultAsync(m => m.Id == mediaId);
 
         if (media == null)
@@ -202,20 +136,28 @@ public class MediaService : IMediaService
             throw new NotFoundException($"媒体ID {mediaId} 不存在");
         }
 
-        if (media.Post?.UserId != userId)
+        // 验证权限：确保媒体资源属于当前用户
+        if (media.UserId != userId)
         {
             throw new UnauthorizedAccessException("无权限更新此媒体文件");
         }
 
         // 更新媒体信息
-        if (request.DisplayOrder.HasValue)
-        {
-            media.DisplayOrder = request.DisplayOrder.Value;
-        }
-
         if (!string.IsNullOrEmpty(request.OriginalName))
         {
             media.OriginalName = request.OriginalName;
+        }
+
+        if (request.Meta != null)
+        {
+            // 这里需要根据实际的Meta类型进行处理
+            // 暂时假设Meta是JSON格式
+            media.Meta = Newtonsoft.Json.JsonConvert.SerializeObject(request.Meta);
+        }
+
+        if (request.Status.HasValue)
+        {
+            media.Status = request.Status.Value;
         }
 
         media.UpdatedAt = DateTime.UtcNow;
@@ -224,6 +166,16 @@ public class MediaService : IMediaService
         _logger.LogInformation("媒体文件更新成功: ID={MediaId}", mediaId);
 
         return MapToMediaResponse(media);
+    }
+
+    public async Task<List<MediaResponse>> GetUserMediasAsync(ulong userId)
+    {
+        var medias = await _context.MediaResources
+            .Where(m => m.UserId == userId && m.Status == 1)
+            .OrderByDescending(m => m.CreatedAt)
+            .ToListAsync();
+
+        return medias.Select(MapToMediaResponse).ToList();
     }
 
     public bool ValidateFileType(string fileName)
@@ -237,29 +189,73 @@ public class MediaService : IMediaService
         return fileSize <= _maxFileSize;
     }
 
-    private MediaType DetermineMediaType(string contentType)
+    private string DetermineMediaType(string contentType)
     {
         if (contentType.StartsWith("image/"))
-            return MediaType.Image;
+            return "image";
         if (contentType.StartsWith("video/"))
-            return MediaType.Video;
+            return "video";
         if (contentType.StartsWith("audio/"))
-            return MediaType.Audio;
-        return MediaType.Other;
+            return "audio";
+        return "other";
     }
 
-    private MediaResponse MapToMediaResponse(PostMedia media)
+    private string MapMediaTypeFromInt(int mediaTypeInt)
     {
+        switch (mediaTypeInt)
+        {
+            case 0: return "image";
+            case 1: return "video";
+            case 2: return "audio";
+            case 3: return "other";
+            default: return "other";
+        }
+    }
+
+    private int MapMediaTypeToInt(string mediaType)
+    {
+        switch (mediaType.ToLower())
+        {
+            case "image": return 0;
+            case "video": return 1;
+            case "audio": return 2;
+            case "other": return 3;
+            default: return 3;
+        }
+    }
+
+    private MediaResponse MapToMediaResponse(MediaResource media)
+    {
+        object? meta = null;
+        if (!string.IsNullOrEmpty(media.Meta))
+        {
+            try
+            {
+                meta = Newtonsoft.Json.JsonConvert.DeserializeObject(media.Meta);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "解析媒体元数据失败: ID={MediaId}", media.Id);
+            }
+        }
+
+        // 尝试将 MediaType 从字符串转换为整数，然后映射为正确的字符串
+        string mediaTypeStr = media.MediaType;
+        if (int.TryParse(media.MediaType, out int mediaTypeInt))
+        {
+            mediaTypeStr = MapMediaTypeFromInt(mediaTypeInt);
+        }
+
         return new MediaResponse
         {
             Id = media.Id,
-            PostId = media.PostId,
-            MediaType = media.MediaType,
+            UserId = media.UserId,
+            MediaType = mediaTypeStr,
             MimeType = media.MimeType,
             OriginalName = media.OriginalName,
-            Url = media.UrlPath ?? string.Empty,
             StorageKey = media.StorageKey,
-            DisplayOrder = media.DisplayOrder,
+            UrlPath = media.UrlPath,
+            Meta = meta,
             Status = media.Status,
             CreatedAt = media.CreatedAt,
             UpdatedAt = media.UpdatedAt

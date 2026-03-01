@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PetVerse.Infrastructure.Data;
 
@@ -10,9 +11,11 @@ using PetVerse.Infrastructure.Data;
 namespace PetVerse.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260228111909_UpdateMediaTypeToEnum")]
+    partial class UpdateMediaTypeToEnum
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -130,8 +133,10 @@ namespace PetVerse.Infrastructure.Migrations
                         .HasColumnType("datetime(6)")
                         .HasColumnName("created_at");
 
-                    b.Property<int>("MediaTypeInt")
-                        .HasColumnType("int")
+                    b.Property<string>("MediaType")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("varchar(10)")
                         .HasColumnName("media_type");
 
                     b.Property<string>("Meta")
@@ -176,7 +181,7 @@ namespace PetVerse.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("MediaTypeInt");
+                    b.HasIndex("MediaType");
 
                     b.HasIndex("Status");
 

@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using PetVerse.Core.Entities;
 
 namespace PetVerse.Core.DTOs.Media;
 
@@ -9,13 +8,13 @@ namespace PetVerse.Core.DTOs.Media;
 public class MediaResponse
 {
     public ulong Id { get; set; }
-    public ulong PostId { get; set; }
-    public MediaType MediaType { get; set; }
+    public ulong UserId { get; set; }
+    public string MediaType { get; set; } = string.Empty;
     public string MimeType { get; set; } = string.Empty;
     public string? OriginalName { get; set; }
-    public string Url { get; set; } = string.Empty;
     public string StorageKey { get; set; } = string.Empty;
-    public ushort DisplayOrder { get; set; }
+    public string? UrlPath { get; set; }
+    public object? Meta { get; set; }
     public sbyte Status { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
@@ -28,8 +27,10 @@ public class UpdateMediaRequest
 {
     [StringLength(255, ErrorMessage = "原始文件名长度不能超过255个字符")]
     public string? OriginalName { get; set; }
-
-    public ushort? DisplayOrder { get; set; }
+    
+    public object? Meta { get; set; }
+    
+    public sbyte? Status { get; set; }
 }
 
 /// <summary>
@@ -37,7 +38,7 @@ public class UpdateMediaRequest
 /// </summary>
 public class MediaQueryParams
 {
-    public ulong? PostId { get; set; }
-    public MediaType? MediaType { get; set; }
+    public ulong? UserId { get; set; }
+    public string? MediaType { get; set; }
     public sbyte? Status { get; set; }
 }

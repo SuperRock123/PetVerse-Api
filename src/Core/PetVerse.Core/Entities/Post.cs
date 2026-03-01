@@ -33,7 +33,7 @@ public class Post
     public uint ViewCount { get; set; } = 0;
     
     [Column("media_count")]
-    public byte MediaCount { get; set; } = 0;
+    public byte? MediaCount { get; set; }
     
     [Column("visibility")]
     public sbyte Visibility { get; set; } = 1; // 1=公开 2=仅好友 3=私密

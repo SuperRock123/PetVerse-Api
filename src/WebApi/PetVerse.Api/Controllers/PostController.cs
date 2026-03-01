@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using PetVerse.Api.DTOs.Post;
 using PetVerse.Core.DTOs;
 using PetVerse.Core.DTOs.Post;
 using PetVerse.Core.Interfaces;
@@ -282,6 +283,69 @@ public class PostController : BaseController
         {
             _logger.LogError(ex, "验证帖子归属关系时发生错误，PostId: {PostId}, UserId: {UserId}", postId, userId);
             return InternalError("验证帖子归属关系失败");
+        }
+    }
+
+    /// <summary>
+    /// 上传完整post信息（包含post完整信息和媒体资源批量上传）
+    /// </summary>
+    [HttpPost("upload")]
+    public async Task<IActionResult> UploadPost([FromForm] UploadPostRequest request)
+    {
+        try
+        {
+            // 获取当前用户ID
+            var userId = GetCurrentUserId();
+            if (userId == 0)
+            {
+                return Unauthorized("无效的用户身份");
+            }
+
+            // 验证用户ID是否匹配
+            if (request.UserId != userId)
+            {
+                return Forbid("用户ID不匹配");
+            }
+
+            // 创建帖子
+            var createPostRequest = new CreatePostRequest
+            {
+                UserId = request.UserId,
+                PetId = request.PetId,
+                Content = request.Content,
+                Location = request.Location,
+                Visibility = request.Visibility
+            };
+
+            var post = await _postService.CreatePostAsync(createPostRequest);
+
+            // 上传媒体文件并关联到帖子
+            if (request.Files != null && request.Files.Any())
+            {
+                var mediaService = HttpContext.RequestServices.GetRequiredService<IMediaService>();
+                var displayOrder = 0;
+
+                foreach (var file in request.Files)
+                {
+                    using var stream = file.OpenReadStream();
+                    await mediaService.UploadMediaAsync(
+                        file.FileName,
+                        file.ContentType,
+                        stream,
+                        null, // url_path 为 null
+                        userId);
+                }
+            }
+
+            // 重新获取包含媒体信息的帖子
+            var updatedPost = await _postService.GetPostByIdAsync(post.Id);
+
+            return Success(updatedPost, "帖子上传成功", 201);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "上传帖子时发生错误");
+            return InternalError("上传帖子失败");
         }
     }
 }
