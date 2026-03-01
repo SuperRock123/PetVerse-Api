@@ -298,13 +298,13 @@ public class PostController : BaseController
             var userId = GetCurrentUserId();
             if (userId == 0)
             {
-                return Unauthorized("无效的用户身份");
+                return Error("无效的用户身份", null, 401);
             }
 
             // 验证用户ID是否匹配
             if (request.UserId != userId)
             {
-                return Forbid("用户ID不匹配");
+                return Error("用户ID不匹配", null, 403);
             }
 
             // 创建帖子

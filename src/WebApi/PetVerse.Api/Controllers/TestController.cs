@@ -4,7 +4,7 @@ namespace PetVerse.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class TestController : ControllerBase
+public class TestController : BaseController
 {
     [HttpGet("simple")]
     public IActionResult SimpleTest()
@@ -14,14 +14,13 @@ public class TestController : ControllerBase
             Timestamp = DateTime.UtcNow 
         };
         
-        // 直接返回原始数据，让全局过滤器自动包装
-        return Ok(data);
+        return Success(data, "测试成功");
     }
 
     [HttpGet("error")]
     public IActionResult ErrorTest()
     {
-        return BadRequest("这是一个错误测试");
+        return Error("这是一个错误测试");
     }
 
     [HttpPost("validation")]
@@ -29,10 +28,14 @@ public class TestController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ModelState);
+            var errors = ModelState.Values
+                .SelectMany(v => v.Errors)
+                .Select(e => e.ErrorMessage)
+                .ToList();
+            return Error("数据验证失败", errors);
         }
         
-        return Ok(new { Result = "验证通过" });
+        return Success(new { Result = "验证通过" }, "验证通过");
     }
 }
 

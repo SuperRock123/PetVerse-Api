@@ -60,7 +60,7 @@ public class MediaController : BaseController
             var userId = GetCurrentUserId();
             if (userId == 0)
             {
-                return Unauthorized("无效的用户身份");
+                return Error("无效的用户身份", null, 401);
             }
 
             using var stream = request.File.OpenReadStream();
@@ -97,7 +97,7 @@ public class MediaController : BaseController
             var userId = GetCurrentUserId();
             if (userId == 0)
             {
-                return Unauthorized("无效的用户身份");
+                return Error("无效的用户身份", null, 401);
             }
 
             var results = new List<MediaResponse>();
@@ -139,7 +139,7 @@ public class MediaController : BaseController
             var userId = GetCurrentUserId();
             if (userId == 0)
             {
-                return Unauthorized("无效的用户身份");
+                return Error("无效的用户身份", null, 401);
             }
 
             var result = await _mediaService.DeleteMediaAsync(id, userId);
@@ -174,7 +174,7 @@ public class MediaController : BaseController
             var userId = GetCurrentUserId();
             if (userId == 0)
             {
-                return Unauthorized("无效的用户身份");
+                return Error("无效的用户身份", null, 401);
             }
 
             var deletedCount = 0;
@@ -346,7 +346,7 @@ public class MediaController : BaseController
             var userId = GetCurrentUserId();
             if (userId == 0)
             {
-                return Unauthorized("无效的用户身份");
+                return Error("无效的用户身份", null, 401);
             }
 
             var result = await _mediaService.UpdateMediaAsync(id, request, userId);
@@ -376,7 +376,7 @@ public class MediaController : BaseController
             var userId = GetCurrentUserId();
             if (userId == 0)
             {
-                return Unauthorized("无效的用户身份");
+                return Error("无效的用户身份", null, 401);
             }
 
             var results = await _mediaService.GetUserMediasAsync(userId);
@@ -430,18 +430,18 @@ public class MediaController : BaseController
             // 验证请求参数
             if (string.IsNullOrWhiteSpace(request.FileName))
             {
-                return BadRequest("文件名不能为空");
+                return Error("文件名不能为空");
             }
 
             if (string.IsNullOrWhiteSpace(request.ContentType))
             {
-                return BadRequest("内容类型不能为空");
+                return Error("内容类型不能为空");
             }
 
             // 验证文件类型
             if (!_allowedExtensions.Contains(Path.GetExtension(request.FileName).ToLower()))
             {
-                return BadRequest($"不支持的文件类型: {Path.GetExtension(request.FileName)}");
+                return Error($"不支持的文件类型: {Path.GetExtension(request.FileName)}");
             }
 
             // 生成存储Key（不实际上传文件，只生成预签名URL）

@@ -7,7 +7,7 @@ namespace PetVerse.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class DatabaseTestController : ControllerBase
+public class DatabaseTestController : BaseController
 {
     private readonly ApplicationDbContext _context;
 
@@ -38,21 +38,11 @@ public class DatabaseTestController : ControllerBase
                 DatabaseName = "petverse"
             };
             
-            return Ok(new { 
-                Success = true, 
-                Message = "数据库连接成功", 
-                Data = result,
-                Timestamp = DateTime.UtcNow 
-            });
+            return Success(result, "数据库连接成功");
         }
         catch (Exception ex)
         {
-            return BadRequest(new { 
-                Success = false, 
-                Message = "数据库连接失败", 
-                Error = ex.Message,
-                Timestamp = DateTime.UtcNow 
-            });
+            return Error("数据库连接失败", new List<string> { ex.Message });
         }
     }
 
@@ -75,21 +65,11 @@ public class DatabaseTestController : ControllerBase
                 ["system_configs"] = await _context.SystemConfigs.CountAsync()
             };
 
-            return Ok(new { 
-                Success = true, 
-                Message = "表信息获取成功", 
-                Data = tables,
-                Timestamp = DateTime.UtcNow 
-            });
+            return Success(tables, "表信息获取成功");
         }
         catch (Exception ex)
         {
-            return BadRequest(new { 
-                Success = false, 
-                Message = "获取表信息失败", 
-                Error = ex.Message,
-                Timestamp = DateTime.UtcNow 
-            });
+            return Error("获取表信息失败", new List<string> { ex.Message });
         }
     }
 
@@ -104,11 +84,6 @@ public class DatabaseTestController : ControllerBase
             Timestamp = DateTime.UtcNow
         };
         
-        return Ok(new { 
-            Success = true, 
-            Message = "服务运行正常", 
-            Data = healthInfo,
-            Timestamp = DateTime.UtcNow 
-        });
+        return Success(healthInfo, "服务运行正常");
     }
 }
