@@ -16,7 +16,6 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
     public DbSet<Pet> Pets { get; set; } = null!;
     public DbSet<PetVaccine> PetVaccines { get; set; } = null!;
     public DbSet<Post> Posts { get; set; } = null!;
-    public DbSet<PostMedia> PostMedias { get; set; } = null!;
     public DbSet<MediaResource> MediaResources { get; set; } = null!;
     public DbSet<Comment> Comments { get; set; } = null!;
     public DbSet<Like> Likes { get; set; } = null!;
@@ -129,25 +128,6 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
                 .WithMany(p => p.Posts)
                 .HasForeignKey(p => p.PetId)
                 .OnDelete(DeleteBehavior.SetNull);
-        });
-
-        // 配置PostMedia实体
-        modelBuilder.Entity<PostMedia>(entity =>
-        {
-            entity.ToTable("post_media");
-            entity.HasKey(e => e.Id);
-            
-            entity.HasIndex(e => e.PostId);
-            entity.HasIndex(e => e.MediaType);
-            entity.HasIndex(e => new { e.PostId, e.StorageKey }).IsUnique();
-            
-            entity.Property(e => e.Status).HasDefaultValue(1);
-            entity.Property(e => e.DisplayOrder).HasDefaultValue((ushort)0);
-            
-            entity.HasOne(pm => pm.Post)
-                .WithMany(p => p.MediaItems)
-                .HasForeignKey(pm => pm.PostId)
-                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // 配置Comment实体

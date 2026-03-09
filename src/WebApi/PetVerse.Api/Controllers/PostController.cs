@@ -348,4 +348,29 @@ public class PostController : BaseController
             return InternalError("上传帖子失败");
         }
     }
+
+    /// <summary>
+    /// 获取推荐帖子列表
+    /// </summary>
+    [HttpGet("recommended")]
+    public async Task<IActionResult> GetRecommendedPosts([FromQuery] int limit = 20)
+    {
+        try
+        {
+            // 获取当前用户ID
+            var userId = GetCurrentUserId();
+            if (userId == 0)
+            {
+                return Error("无效的用户身份", null, 401);
+            }
+
+            var posts = await _postService.GetRecommendedPostsAsync(userId, limit);
+            return Success(posts, "获取推荐帖子成功");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "获取推荐帖子时发生错误");
+            return InternalError("获取推荐帖子失败");
+        }
+    }
 }

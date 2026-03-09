@@ -14,6 +14,16 @@ builder.Host.UseSerilog((context, configuration) =>
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+
+// 配置 CORS - 允许所有源
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAllOrigins",
+        builder => builder
+            .AllowAnyOrigin()
+            .AllowAnyMethod()
+            .AllowAnyHeader());
+});
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
@@ -107,6 +117,9 @@ if (app.Environment.IsDevelopment())
 
 // 使用全局异常处理中间件
 app.UseGlobalExceptionMiddleware();
+
+// 启用 CORS
+app.UseCors("AllowAllOrigins");
 
 // 使用自定义认证中间件
 app.UseCustomAuthentication();

@@ -114,6 +114,72 @@ public class MediaService : IMediaService
         }
     }
 
+    public async Task<bool> DeleteMediaByStorageKeyAsync(string storageKey, ulong userId)
+    {
+        var media = await _context.MediaResources
+            .FirstOrDefaultAsync(m => m.StorageKey == storageKey && m.UserId == userId);
+
+        if (media == null)
+        {
+            throw new NotFoundException($"媒体文件不存在或无权限访问: {storageKey}");
+        }
+
+        try
+        {
+            // 从存储服务删除文件
+            await _storageService.DeleteFileAsync(storageKey);
+
+            // 软删除数据库记录
+            media.Status = 0; // 0表示已删除
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("媒体文件删除成功: Key={Key}, UserId={UserId}", storageKey, userId);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "媒体文件删除失败: Key={Key}", storageKey);
+            return false;
+        }
+    }
+
+    public async Task<int> DeleteMediasByStorageKeysAsync(List<string> storageKeys, ulong userId)
+    {
+        var deletedCount = 0;
+
+        foreach (var storageKey in storageKeys)
+        {
+            try
+            {
+                var media = await _context.MediaResources
+                    .FirstOrDefaultAsync(m => m.StorageKey == storageKey && m.UserId == userId);
+
+                if (media == null)
+                {
+                    _logger.LogWarning("媒体文件不存在或无权限访问: Key={Key}, UserId={UserId}", storageKey, userId);
+                    continue;
+                }
+
+                // 从存储服务删除文件
+                await _storageService.DeleteFileAsync(storageKey);
+
+                // 软删除数据库记录
+                media.Status = 0; // 0表示已删除
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("媒体文件删除成功: Key={Key}, UserId={UserId}", storageKey, userId);
+                deletedCount++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "媒体文件删除失败: Key={Key}", storageKey);
+                // 继续处理下一个文件
+            }
+        }
+
+        return deletedCount;
+    }
+
     public async Task<MediaResponse> GetMediaAsync(ulong mediaId)
     {
         var media = await _context.MediaResources.FindAsync(mediaId);

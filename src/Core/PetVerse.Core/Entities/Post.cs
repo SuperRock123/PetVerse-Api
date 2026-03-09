@@ -55,5 +55,4 @@ public class Post
     public virtual Pet? Pet { get; set; }
     public virtual ICollection<Comment> Comments { get; set; } = new List<Comment>();
     public virtual ICollection<Like> Likes { get; set; } = new List<Like>();
-    public virtual ICollection<PostMedia> MediaItems { get; set; } = new List<PostMedia>();
 }

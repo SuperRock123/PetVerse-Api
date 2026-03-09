@@ -1,3 +1,4 @@
+using System.IO;
 using PetVerse.Core.DTOs.Media;
 
 namespace PetVerse.Core.Interfaces;
@@ -62,4 +63,20 @@ public interface IMediaService
     /// <param name="fileSize">文件大小</param>
     /// <returns>是否符合大小限制</returns>
     bool ValidateFileSize(long fileSize);
+
+    /// <summary>
+    /// 通过存储键删除媒体文件
+    /// </summary>
+    /// <param name="storageKey">存储键</param>
+    /// <param name="userId">用户ID（用于权限验证）</param>
+    /// <returns>是否删除成功</returns>
+    Task<bool> DeleteMediaByStorageKeyAsync(string storageKey, ulong userId);
+
+    /// <summary>
+    /// 通过存储键批量删除媒体文件
+    /// </summary>
+    /// <param name="storageKeys">存储键集合</param>
+    /// <param name="userId">用户ID（用于权限验证）</param>
+    /// <returns>删除成功的数量</returns>
+    Task<int> DeleteMediasByStorageKeysAsync(List<string> storageKeys, ulong userId);
 }

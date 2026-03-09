@@ -195,6 +195,33 @@ public class MediaController : BaseController
     }
 
     /// <summary>
+    /// 通过存储键批量删除媒体文件
+    /// </summary>
+    /// <param name="storageKeys">存储键集合</param>
+    /// <returns>删除成功的数量</returns>
+    [HttpDelete("batch/by-storage-keys")]
+    public async Task<IActionResult> DeleteMediasByStorageKeys([FromBody] List<string> storageKeys)
+    {
+        try
+        {
+            // 获取当前用户ID
+            var userId = GetCurrentUserId();
+            if (userId == 0)
+            {
+                return Error("无效的用户身份", null, 401);
+            }
+
+            var deletedCount = await _mediaService.DeleteMediasByStorageKeysAsync(storageKeys, userId);
+            return Success<object>(new { deletedCount }, $"成功删除 {deletedCount} 个媒体文件");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "通过存储键批量删除媒体文件失败");
+            return InternalError("通过存储键批量删除媒体文件失败");
+        }
+    }
+
+    /// <summary>
     /// 获取媒体详情
     /// </summary>
     /// <param name="id">媒体ID</param>
