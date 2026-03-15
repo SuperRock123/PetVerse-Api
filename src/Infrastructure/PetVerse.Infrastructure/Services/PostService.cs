@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using PetVerse.Core.DTOs.Post;
 using PetVerse.Core.Entities;
@@ -8,13 +9,13 @@ using PetVerse.Infrastructure.Data;
 
 namespace PetVerse.Infrastructure.Services
 {
-    /// <summary>
-    /// 帖子服务实现
-    /// </summary>
-    public class PostService(ApplicationDbContext context, ILogger<PostService> logger) : IPostService
+    public class PostService(ApplicationDbContext context, IStorageService storageService, IConfiguration configuration, ILogger<PostService> logger) : IPostService
     {
         private readonly ApplicationDbContext _context = context;
+        private readonly IStorageService _storageService = storageService;
+        private readonly IConfiguration _configuration = configuration;
         private readonly ILogger<PostService> _logger = logger;
+        private readonly int _presignedUrlExpireMinutes = 60;
 
         public async Task<(List<PostResponse> Posts, int TotalCount)> GetAllPostsAsync(PostQueryParams queryParams)
         {
@@ -25,7 +26,6 @@ namespace PetVerse.Infrastructure.Services
                     .Include(p => p.Pet)
                     .AsQueryable();
 
-                // 应用查询条件
                 if (queryParams.UserId.HasValue)
                 {
                     query = query.Where(p => p.UserId == queryParams.UserId.Value);
@@ -61,20 +61,18 @@ namespace PetVerse.Infrastructure.Services
                     query = query.Where(p => p.CreatedAt <= queryParams.ToDate.Value);
                 }
 
-                // 只显示正常状态的帖子
                 query = query.Where(p => p.Status == 1);
 
-                // 获取总数
                 int totalCount = await query.CountAsync();
 
-                // 应用分页
                 List<Post> posts = await query
                     .OrderByDescending(p => p.CreatedAt)
                     .Skip((queryParams.Page - 1) * queryParams.PageSize)
                     .Take(queryParams.PageSize)
                     .ToListAsync();
 
-                List<PostResponse> postResponses = [.. posts.Select(MapToPostResponse)];
+                var mediaUrlsDict = await GetMediaUrlsForPostsAsync(posts);
+                List<PostResponse> postResponses = [.. posts.Select(p => MapToPostResponse(p, mediaUrlsDict))];
 
                 return (postResponses, totalCount);
             }
@@ -103,7 +101,6 @@ namespace PetVerse.Infrastructure.Services
 
                 PostDetailResponse response = MapToPostDetailResponse(post);
 
-                // 检查当前用户是否点赞
                 if (currentUserId.HasValue)
                 {
                     response.IsLiked = await _context.Likes.AnyAsync(l =>
@@ -133,7 +130,8 @@ namespace PetVerse.Infrastructure.Services
                     .Take(limit)
                     .ToListAsync();
 
-                return [.. posts.Select(MapToPostResponse)];
+                var mediaUrlsDict = await GetMediaUrlsForPostsAsync(posts);
+                return [.. posts.Select(p => MapToPostResponse(p, mediaUrlsDict))];
             }
             catch (Exception ex)
             {
@@ -154,7 +152,8 @@ namespace PetVerse.Infrastructure.Services
                     .Take(limit)
                     .ToListAsync();
 
-                return [.. posts.Select(MapToPostResponse)];
+                var mediaUrlsDict = await GetMediaUrlsForPostsAsync(posts);
+                return [.. posts.Select(p => MapToPostResponse(p, mediaUrlsDict))];
             }
             catch (Exception ex)
             {
@@ -167,14 +166,12 @@ namespace PetVerse.Infrastructure.Services
         {
             try
             {
-                // 验证用户是否存在
                 bool userExists = await _context.Users.AnyAsync(u => u.Id == request.UserId && u.Status == 1);
                 if (!userExists)
                 {
                     throw new NotFoundException($"用户ID {request.UserId} 不存在");
                 }
 
-                // 如果指定了宠物ID，验证宠物是否存在且属于该用户
                 if (request.PetId.HasValue)
                 {
                     bool petExists = await _context.Pets.AnyAsync(p =>
@@ -193,23 +190,23 @@ namespace PetVerse.Infrastructure.Services
                     Location = request.Location,
                     Visibility = request.Visibility,
                     Status = 1,
-                    // MediaCount 是生成列，不需要手动设置
                 };
 
                 _ = _context.Posts.Add(post);
                 _ = await _context.SaveChangesAsync();
 
-                // 处理媒体资源
-                if (request.MediaItems != null && request.MediaItems.Count != 0)
+                if (request.MediaIds != null && request.MediaIds.Count != 0)
                 {
-                    // 这里应该将媒体资源ID存储到post的media_ids字段中
-                    // 但由于我们没有修改Post实体的结构，暂时跳过这部分
-                    // 实际项目中需要在Post实体中添加media_ids字段
+                    post.MediaIds = System.Text.Json.JsonSerializer.Serialize(request.MediaIds);
+                    post.MediaCount = (byte)request.MediaIds.Count;
+                    _ = await _context.SaveChangesAsync();
+                }
+                else if (request.MediaItems != null && request.MediaItems.Count != 0)
+                {
                     post.MediaCount = (byte)request.MediaItems.Count;
                     _ = await _context.SaveChangesAsync();
                 }
 
-                // 重新加载包含关联信息的数据
                 Post createdPost = await _context.Posts
                     .Include(p => p.User)
                     .Include(p => p.Pet)
@@ -219,11 +216,11 @@ namespace PetVerse.Infrastructure.Services
             }
             catch (NotFoundException)
             {
-                throw; // 重新抛出未找到异常
+                throw;
             }
             catch (ValidationException)
             {
-                throw; // 重新抛出验证异常
+                throw;
             }
             catch (Exception ex)
             {
@@ -239,11 +236,8 @@ namespace PetVerse.Infrastructure.Services
                 Post post = await _context.Posts
                     .Include(p => p.User)
                     .Include(p => p.Pet)
-                    //TODO 这个有问题
-                    // .Include(p => p.MediaItems)
                     .FirstOrDefaultAsync(p => p.Id == id && p.Status == 1) ?? throw new NotFoundException($"帖子ID {id} 不存在");
 
-                // 更新帖子信息
                 if (request.Content != null)
                 {
                     post.Content = request.Content;
@@ -259,7 +253,6 @@ namespace PetVerse.Infrastructure.Services
                     post.Visibility = request.Visibility.Value;
                 }
 
-                // 更新媒体数量
                 if (request.MediaItems != null)
                 {
                     post.MediaCount = (byte?)request.MediaItems.Count;
@@ -272,7 +265,7 @@ namespace PetVerse.Infrastructure.Services
             }
             catch (NotFoundException)
             {
-                throw; // 重新抛出未找到异常
+                throw;
             }
             catch (Exception ex)
             {
@@ -291,7 +284,7 @@ namespace PetVerse.Infrastructure.Services
                     return false;
                 }
 
-                post.Status = 0; // 软删除
+                post.Status = 0;
                 post.UpdatedAt = DateTime.UtcNow;
 
                 _ = await _context.SaveChangesAsync();
@@ -308,21 +301,18 @@ namespace PetVerse.Infrastructure.Services
         {
             try
             {
-                // 验证用户是否存在
                 bool userExists = await _context.Users.AnyAsync(u => u.Id == request.UserId && u.Status == 1);
                 if (!userExists)
                 {
                     throw new NotFoundException($"用户ID {request.UserId} 不存在");
                 }
 
-                // 验证帖子是否存在
                 bool postExists = await _context.Posts.AnyAsync(p => p.Id == request.PostId && p.Status == 1);
                 if (!postExists)
                 {
                     throw new NotFoundException($"帖子ID {request.PostId} 不存在");
                 }
 
-                // 如果指定了父评论，验证父评论是否存在
                 if (request.ParentId.HasValue)
                 {
                     bool parentCommentExists = await _context.Comments.AnyAsync(c =>
@@ -344,7 +334,6 @@ namespace PetVerse.Infrastructure.Services
 
                 _ = _context.Comments.Add(comment);
 
-                // 更新帖子的评论数
                 Post? post = await _context.Posts.FindAsync(request.PostId);
                 if (post != null)
                 {
@@ -354,7 +343,6 @@ namespace PetVerse.Infrastructure.Services
 
                 _ = await _context.SaveChangesAsync();
 
-                // 重新加载包含用户信息的数据
                 Comment createdComment = await _context.Comments
                     .Include(c => c.User)
                     .FirstAsync(c => c.Id == comment.Id);
@@ -363,11 +351,11 @@ namespace PetVerse.Infrastructure.Services
             }
             catch (NotFoundException)
             {
-                throw; // 重新抛出未找到异常
+                throw;
             }
             catch (ValidationException)
             {
-                throw; // 重新抛出验证异常
+                throw;
             }
             catch (Exception ex)
             {
@@ -380,14 +368,12 @@ namespace PetVerse.Infrastructure.Services
         {
             try
             {
-                // 验证用户是否存在
                 bool userExists = await _context.Users.AnyAsync(u => u.Id == request.UserId && u.Status == 1);
                 if (!userExists)
                 {
                     throw new NotFoundException($"用户ID {request.UserId} 不存在");
                 }
 
-                // 验证目标是否存在
                 bool targetExists = false;
                 if (request.TargetType == "post")
                 {
@@ -403,7 +389,6 @@ namespace PetVerse.Infrastructure.Services
                     throw new NotFoundException($"目标 {request.TargetType} ID {request.TargetId} 不存在");
                 }
 
-                // 检查是否已点赞
                 Like? existingLike = await _context.Likes.FirstOrDefaultAsync(l =>
                     l.TargetType == request.TargetType &&
                     l.TargetId == request.TargetId &&
@@ -411,10 +396,8 @@ namespace PetVerse.Infrastructure.Services
 
                 if (existingLike != null)
                 {
-                    // 取消点赞
                     _ = _context.Likes.Remove(existingLike);
 
-                    // 更新点赞数
                     if (request.TargetType == "post")
                     {
                         Post? post = await _context.Posts.FindAsync(request.TargetId);
@@ -430,16 +413,14 @@ namespace PetVerse.Infrastructure.Services
                         if (comment != null && comment.LikesCount > 0)
                         {
                             comment.LikesCount--;
-                            // Comment实体没有UpdatedAt字段，跳过更新
                         }
                     }
 
                     _ = await _context.SaveChangesAsync();
-                    return false; // 表示取消点赞
+                    return false;
                 }
                 else
                 {
-                    // 添加点赞
                     Like like = new()
                     {
                         TargetType = request.TargetType,
@@ -449,7 +430,6 @@ namespace PetVerse.Infrastructure.Services
 
                     _ = _context.Likes.Add(like);
 
-                    // 更新点赞数
                     if (request.TargetType == "post")
                     {
                         Post? post = await _context.Posts.FindAsync(request.TargetId);
@@ -465,17 +445,16 @@ namespace PetVerse.Infrastructure.Services
                         if (comment != null)
                         {
                             comment.LikesCount++;
-                            // Comment实体没有UpdatedAt字段，跳过更新
                         }
                     }
 
                     _ = await _context.SaveChangesAsync();
-                    return true; // 表示新增点赞
+                    return true;
                 }
             }
             catch (NotFoundException)
             {
-                throw; // 重新抛出未找到异常
+                throw;
             }
             catch (Exception ex)
             {
@@ -514,19 +493,16 @@ namespace PetVerse.Infrastructure.Services
         {
             try
             {
-                // 查询所有正常状态的帖子，排除当前用户自己的帖子
                 List<Post> posts = await _context.Posts
                     .Include(p => p.User)
                     .Include(p => p.Pet)
                     .Where(p => p.Status == 1 && p.UserId != userId)
                     .ToListAsync();
 
-                // 简单的推荐算法：基于互动度（点赞数 + 评论数）和新鲜度（发布时间）
                 List<Post> recommendedPosts = [.. posts
                     .Select(post => new
                     {
                         Post = post,
-                        // 计算推荐分数：互动度 + 新鲜度权重
                         Score = post.LikesCount + post.CommentsCount +
                                 (1 / (1 + (DateTime.UtcNow - post.CreatedAt).TotalDays) * 10)
                     })
@@ -534,7 +510,8 @@ namespace PetVerse.Infrastructure.Services
                     .Take(limit)
                     .Select(x => x.Post)];
 
-                return [.. recommendedPosts.Select(MapToPostResponse)];
+                var mediaUrlsDict = await GetMediaUrlsForPostsAsync(recommendedPosts);
+                return [.. recommendedPosts.Select(p => MapToPostResponse(p, mediaUrlsDict))];
             }
             catch (Exception ex)
             {
@@ -543,13 +520,109 @@ namespace PetVerse.Infrastructure.Services
             }
         }
 
-        #region 私有方法
-
-        private PostResponse MapToPostResponse(Post post)
+        private async Task<Dictionary<ulong, List<string>>> GetMediaUrlsForPostsAsync(List<Post> posts)
         {
-            // 由于我们没有修改Post实体添加media_ids字段，暂时返回空的媒体URL列表
-            // 实际项目中需要从media_ids字段解析媒体资源ID，然后从media_resources表获取URL
-            List<string> mediaUrls = [];
+            var result = new Dictionary<ulong, List<string>>();
+
+            var allMediaIds = new HashSet<ulong>();
+            foreach (var post in posts)
+            {
+                if (!string.IsNullOrEmpty(post.MediaIds))
+                {
+                    try
+                    {
+                        var ids = System.Text.Json.JsonSerializer.Deserialize<List<ulong>>(post.MediaIds);
+                        if (ids != null)
+                        {
+                            foreach (var id in ids)
+                            {
+                                allMediaIds.Add(id);
+                            }
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+
+            if (allMediaIds.Count == 0)
+            {
+                return result;
+            }
+
+            var mediaResources = await _context.MediaResources
+                .Where(m => allMediaIds.Contains(m.Id))
+                .ToDictionaryAsync(m => m.Id, m => m.StorageKey);
+
+            foreach (var post in posts)
+            {
+                var urls = new List<string>();
+                if (!string.IsNullOrEmpty(post.MediaIds))
+                {
+                    try
+                    {
+                        var ids = System.Text.Json.JsonSerializer.Deserialize<List<ulong>>(post.MediaIds);
+                        if (ids != null)
+                        {
+                            foreach (var id in ids)
+                            {
+                                if (mediaResources.TryGetValue(id, out var storageKey))
+                                {
+                                    var url = await GetPresignedUrlAsync(storageKey);
+                                    urls.Add(url);
+                                }
+                            }
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+                result[post.Id] = urls;
+            }
+
+            return result;
+        }
+
+        private async Task<string> GetPresignedUrlAsync(string storageKey)
+        {
+            try
+            {
+                _logger.LogInformation("正在生成预签名URL: {StorageKey}", storageKey);
+                var url = await _storageService.GetFileUrlAsync(storageKey, _presignedUrlExpireMinutes);
+                _logger.LogInformation("预签名URL生成成功: {Url}", url);
+                return url;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "生成预签名URL失败，使用降级URL: {StorageKey}", storageKey);
+                return GetFallbackUrl(storageKey);
+            }
+        }
+
+        private string GetFallbackUrl(string storageKey)
+        {
+            var endpoint = _configuration["Storage:MinIO:Endpoint"] ?? _configuration["MinIO:Endpoint"] ?? "localhost:9000";
+            var bucketName = _configuration["Storage:MinIO:BucketName"] ?? _configuration["MinIO:BucketName"] ?? "petverse";
+            var useSsl = bool.TryParse(_configuration["Storage:MinIO:UseSSL"], out var ssl) && ssl;
+
+            var protocol = useSsl ? "https" : "http";
+            return $"{protocol}://{endpoint}/{bucketName}/{storageKey}";
+        }
+
+        private List<string> GetMediaUrls(Post post, Dictionary<ulong, List<string>>? mediaUrlsDict)
+        {
+            if (mediaUrlsDict != null && mediaUrlsDict.TryGetValue(post.Id, out var urls))
+            {
+                return urls;
+            }
+            return [];
+        }
+
+        private PostResponse MapToPostResponse(Post post, Dictionary<ulong, List<string>>? mediaUrlsDict = null)
+        {
+            List<string> mediaUrls = GetMediaUrls(post, mediaUrlsDict);
 
             return new PostResponse
             {
@@ -620,7 +693,5 @@ namespace PetVerse.Infrastructure.Services
                 Nickname = comment.User?.Nickname
             };
         }
-
-        #endregion
     }
 }

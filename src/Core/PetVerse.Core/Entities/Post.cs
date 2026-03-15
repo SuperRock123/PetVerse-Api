@@ -34,7 +34,10 @@ public class Post
     
     [Column("media_count")]
     public byte? MediaCount { get; set; }
-    
+
+    [Column("media_ids")]
+    public string? MediaIds { get; set; }
+
     [Column("visibility")]
     public sbyte Visibility { get; set; } = 1; // 1=公开 2=仅好友 3=私密
     

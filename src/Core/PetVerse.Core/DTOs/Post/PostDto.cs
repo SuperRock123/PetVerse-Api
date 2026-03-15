@@ -19,6 +19,8 @@ public class CreatePostRequest
 
     public List<CreatePostMediaRequest>? MediaItems { get; set; }
 
+    public List<ulong>? MediaIds { get; set; }
+
     [StringLength(128, ErrorMessage = "位置信息长度不能超过128个字符")]
     public string? Location { get; set; }
 
