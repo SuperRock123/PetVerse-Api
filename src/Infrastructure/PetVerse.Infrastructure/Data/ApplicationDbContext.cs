@@ -167,10 +167,20 @@ public class ApplicationDbContext : DbContext, IUnitOfWork
             entity.HasIndex(e => new { e.TargetType, e.TargetId, e.UserId }).IsUnique();
             entity.HasIndex(e => new { e.TargetType, e.TargetId });
             
-            entity.HasOne(l => l.User)
-                .WithMany()
-                .HasForeignKey(l => l.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
+            // 忽略导航属性，因为Like使用多态设计，不直接关联Post/Comment
+            entity.Ignore(e => e.User);
+        });
+        
+        // 配置Post实体 - 忽略Likes导航属性（Like使用多态设计）
+        modelBuilder.Entity<Post>(entity =>
+        {
+            entity.Ignore(e => e.Likes);
+        });
+        
+        // 配置Comment实体 - 忽略Likes导航属性（Like使用多态设计）
+        modelBuilder.Entity<Comment>(entity =>
+        {
+            entity.Ignore(e => e.Likes);
         });
 
         // 配置Report实体
